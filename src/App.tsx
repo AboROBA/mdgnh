@@ -874,8 +874,8 @@ export default function App() {
 
       {/* فوتر التطبيق */}
       <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 pt-6 border-t border-white/5 text-center text-[11px] text-white/30 flex flex-col sm:flex-row justify-between gap-4 items-center">
-        <p>جميع الحقوق محفوظة © {new Date().getFullYear()} - وحدة البرمجيات لمداجن سورية الكبرى الرقمية.</p>
-        <p className="font-mono opacity-80">v3.0 (نسخة متصلة بقاعدة البيانات)</p>
+        <p>جميع الحقوق محفوظة © {new Date().getFullYear()} - محمد القاطع</p>
+        <p className="font-mono opacity-80">v3.0 نسخة محسنة الاصدار</p>
       </footer>
 
     </div>
