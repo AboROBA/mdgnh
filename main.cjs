@@ -6,14 +6,15 @@ let serverProcess = null;
 let mainWindow = null;
 
 function startServer() {
-  console.log('[Electron] Spawning Node.js/Express SQLite server...');
+  console.log('[Electron] Spawning Node.js/Express MySQL Cloud server...');
   const isProd = app.isPackaged;
 
   if (isProd) {
     // تشغيل السيرفر المجمع في مجلد dist
     const serverPath = path.join(__dirname, 'dist', 'server.cjs');
     serverProcess = fork(serverPath, [], {
-      env: { ...process.env, NODE_ENV: 'production' }
+      env: { ...process.env, NODE_ENV: 'production' },
+      stdio: 'inherit'
     });
   } else {
     // تشغيل السيرفر في وضع التطوير المحلي
@@ -21,7 +22,8 @@ function startServer() {
     const tsxCli = path.join(__dirname, 'node_modules', 'tsx', 'dist', 'cli.mjs');
     
     serverProcess = fork(tsxCli, [serverPath], {
-      env: { ...process.env, NODE_ENV: 'development' }
+      env: { ...process.env, NODE_ENV: 'development' },
+      stdio: 'inherit'
     });
   }
 
@@ -42,10 +44,20 @@ function createWindow() {
     }
   });
 
-  // منح السيرفر ثانيتين للتمهيد والاتصال بقاعدة بيانات SQLite ثم التحميل
-  setTimeout(() => {
-    mainWindow.loadURL('http://localhost:3000');
-  }, 2000);
+  // محاولة التحميل فوراً
+  mainWindow.loadURL('http://localhost:3000');
+
+  // في حال فشل التحميل (بسبب تأخر في اتصال قاعدة البيانات السحابية مثلاً)، تتم إعادة المحاولة كل ثانية
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.log(`[Electron] Port 3000 not ready yet or loading failed. Retrying in 1s... (Error: ${errorDescription})`);
+    if (validatedURL.startsWith('http://localhost:3000')) {
+      setTimeout(() => {
+        if (mainWindow) {
+          mainWindow.loadURL('http://localhost:3000');
+        }
+      }, 1000);
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;

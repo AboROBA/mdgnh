@@ -26,7 +26,11 @@ import {
   Users,
   LogOut,
   UserCheck,
-  Loader2
+  Loader2,
+  Sun,
+  Moon,
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function App() {
@@ -38,6 +42,93 @@ export default function App() {
   const [mortalities, setMortalities] = useState<Mortality[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [exchangeRate, setExchangeRate] = useState<number>(14100);
+
+  // نظام وضع الإضاءة / الوضع الداكن المطور
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('poultry_theme') as 'light' | 'dark') || 'dark';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('poultry_theme', theme);
+    const root = document.documentElement;
+    if (theme === 'light') {
+      root.classList.add('light');
+    } else {
+      root.classList.remove('light');
+    }
+  }, [theme]);
+
+  // نظام التنبيهات والأصوات التفاعلية
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'alert' } | null>(null);
+
+  const playNotificationSound = (type: 'success' | 'alert') => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      if (type === 'success') {
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        osc1.connect(gainNode);
+        osc2.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+        
+        // Uplifting upward chord
+        osc1.frequency.setValueAtTime(523.25, now); // C5
+        osc1.frequency.setValueAtTime(659.25, now + 0.1); // E5
+        osc1.frequency.setValueAtTime(783.99, now + 0.2); // G5
+        
+        osc2.frequency.setValueAtTime(1046.50, now); // C6
+        
+        gainNode.gain.setValueAtTime(0.12, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.45);
+        osc2.stop(now + 0.45);
+      } else {
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.linearRampToValueAtTime(130, now + 0.35);
+        
+        gainNode.gain.setValueAtTime(0.15, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        
+        osc.start(now);
+        osc.stop(now + 0.45);
+      }
+    } catch (err) {
+      console.warn('AudioContext prevented from initialising or in iframe restricts:', err);
+    }
+  };
+
+  const triggerNotification = (message: string, type: 'success' | 'alert' = 'success') => {
+    setNotification({ message, type });
+    playNotificationSound(type);
+    
+    // Auto-clear notification toast after 4 seconds
+    setTimeout(() => {
+      setNotification(null);
+    }, 4000);
+  };
   
   // حالات إدارة المستخدمين والمصادقة
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -110,6 +201,7 @@ export default function App() {
     if (currentUser?.role === 'viewer') return;
     try {
       setExchangeRate(rate); // تحديث متفائل سريع للواجهة
+      triggerNotification('تم تحديث سعر الصرف اليومي بنجاح!', 'success');
       await fetch('/api/rate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -155,6 +247,7 @@ export default function App() {
       setCycles(prev => [newCycle, ...prev]);
       setExpenses(prev => [initialChicksBill, ...prev]);
 
+      triggerNotification('تم بدء الدورة الإنتاجية واستيراد الصيصان بنجاح!', 'success');
       // الإرسال للسيرفر لحفظها بقاعدة بيانات MySQL
       await fetch('/api/cycles', {
         method: 'POST',
@@ -190,6 +283,7 @@ export default function App() {
       };
 
       setCycles(prev => prev.map(c => c.id === id ? updatedCycle : c));
+      triggerNotification('تم إنهاء وإغلاق الدورة المحاسبية الحركية وتجميدها بالأرشيف.', 'success');
 
       await fetch(`/api/cycles/${id}`, {
         method: 'PUT',
@@ -227,6 +321,7 @@ export default function App() {
         });
       }
 
+      triggerNotification('تم تحديث بيانات ومؤشرات الدورة بنجاح.', 'success');
       await fetch(`/api/cycles/${updatedCycle.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -255,6 +350,7 @@ export default function App() {
       setMortalities(prev => prev.filter(m => m.cycleId !== id));
       setSales(prev => prev.filter(s => s.cycleId !== id));
 
+      triggerNotification('تم حذف الفوج بالكامل وكافة السجلات المرتبطة به.', 'alert');
       await fetch(`/api/cycles/${id}`, { method: 'DELETE' });
       setActiveTab('cycles');
       refreshDatabaseData();
@@ -273,6 +369,7 @@ export default function App() {
         id: `exp-${Date.now()}`
       };
       setExpenses(prev => [expense, ...prev]);
+      triggerNotification('تم رصد وتسجيل الفاتورة/المصروف بنجاح!', 'success');
 
       await fetch('/api/expenses', {
         method: 'POST',
@@ -292,6 +389,7 @@ export default function App() {
 
     try {
       setExpenses(prev => prev.filter(e => e.id !== id));
+      triggerNotification('تم حذف وإبطال المصروف المحدد من الفوج.', 'alert');
       await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
       refreshDatabaseData();
     } catch (err) {
@@ -309,6 +407,7 @@ export default function App() {
         id: `mort-${Date.now()}`
       };
       setMortalities(prev => [mortality, ...prev]);
+      triggerNotification('تم قيد وفيات الطيور اليومية في السجلات الحيوية للفوج.', 'success');
 
       await fetch('/api/mortalities', {
         method: 'POST',
@@ -328,6 +427,7 @@ export default function App() {
 
     try {
       setMortalities(prev => prev.filter(m => m.id !== id));
+      triggerNotification('تم مسح قيد النفوق المحدد وإعادة الطيور للحيازة.', 'alert');
       await fetch(`/api/mortalities/${id}`, { method: 'DELETE' });
       refreshDatabaseData();
     } catch (err) {
@@ -345,6 +445,7 @@ export default function App() {
         id: `sale-${Date.now()}`
       };
       setSales(prev => [sale, ...prev]);
+      triggerNotification('تم تثبيت صفقة بيع وتسويق الفروج بنجاح الميزان!', 'success');
 
       await fetch('/api/sales', {
         method: 'POST',
@@ -364,6 +465,7 @@ export default function App() {
 
     try {
       setSales(prev => prev.filter(s => s.id !== id));
+      triggerNotification('تم إلغاء وشطب عقد مبيعات الفروج المحدد.', 'alert');
       await fetch(`/api/sales/${id}`, { method: 'DELETE' });
       refreshDatabaseData();
     } catch (err) {
@@ -460,7 +562,32 @@ export default function App() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gradient-to-br from-emerald-950 via-teal-900 to-slate-950 text-white font-sans antialiased pb-12">
+    <div dir="rtl" className={`min-h-screen font-sans antialiased pb-12 transition-all duration-300 ${
+      theme === 'dark' 
+        ? 'bg-gradient-to-br from-emerald-950 via-teal-900 to-slate-950 text-white' 
+        : 'bg-gradient-to-br from-emerald-50 via-teal-50 to-slate-100 text-slate-800'
+    }`}>
+      
+      {/* نظام التنبيهات المنبثقة التفاعلية */}
+      {notification && (
+        <div className={`fixed top-4 left-4 z-50 p-4 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-in pointer-events-auto border transition-all duration-300 max-w-sm ${
+          notification.type === 'success' 
+            ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300 animate-slide-in' 
+            : 'bg-red-950/90 border-red-500/40 text-red-350 animate-slide-in'
+        }`}>
+          <div className={`p-2 rounded-lg ${notification.type === 'success' ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
+            {notification.type === 'success' ? (
+              <Sparkles className="w-5 h-5 text-emerald-400" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-red-500 font-bold" />
+            )}
+          </div>
+          <div className="text-right">
+            <h4 className="text-xs font-bold font-sans text-white">تنبيه النظام الفوري</h4>
+            <p className="text-[11px] opacity-90 mt-0.5">{notification.message}</p>
+          </div>
+        </div>
+      )}
       
       {/* هيدر تطبيق الدواجن الذكية المطور */}
       <header className="sticky top-0 z-45 backdrop-blur-md bg-slate-950/50 border-b border-white/10 shadow-lg">
@@ -509,6 +636,20 @@ export default function App() {
                  currentUser.role === 'manager' ? 'مشرف فني' : 'حساب مشاهد فقط'}
               </span>
             </div>
+
+            {/* زر تبديل الوضع الداكن والوضع الفاتح المطور */}
+            <button
+              id="btn-app-theme-toggle"
+              onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+              className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white rounded-xl transition-all cursor-pointer shadow flex items-center justify-center.5"
+              title={theme === 'dark' ? "التبديل للمظهر المضيء" : "التبديل للمظهر الداكن"}
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-slate-750" />
+              )}
+            </button>
 
             <div className="h-7 w-[1px] bg-white/10" />
 
@@ -733,8 +874,8 @@ export default function App() {
 
       {/* فوتر التطبيق */}
       <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 pt-6 border-t border-white/5 text-center text-[11px] text-white/30 flex flex-col sm:flex-row justify-between gap-4 items-center">
-        <p>جميع الحقوق محفوظة © {new Date().getFullYear()} -محمد القاطع</p>
-        <p className="font-mono opacity-80">v3.0 نسخة محسنة </p>
+        <p>جميع الحقوق محفوظة © {new Date().getFullYear()} - وحدة البرمجيات لمداجن سورية الكبرى الرقمية.</p>
+        <p className="font-mono opacity-80">v3.0 (نسخة متصلة بقاعدة البيانات)</p>
       </footer>
 
     </div>

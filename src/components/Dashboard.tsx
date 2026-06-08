@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Cycle, Expense, Mortality, Sale, AppUser } from '../types';
 import { formatUSD, formatSYP, calculateCycleStats } from '../utils';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from 'recharts';
-import { Landmark, TrendingUp, Skull, Sparkles, Scale, DollarSign, Wallet, Percent, FastForward, PlusCircle, AlertTriangle } from 'lucide-react';
+import { Landmark, TrendingUp, Skull, Sparkles, Scale, DollarSign, Wallet, Percent, FastForward, PlusCircle, AlertTriangle, Download, Clock, Calendar } from 'lucide-react';
 import { CATEGORY_LABELS } from './ExpenseTracker';
 
 interface DashboardProps {
@@ -66,6 +66,90 @@ export default function Dashboard({
   const canManageMortalities = currentUser.role === 'admin' || !!userPerms.canManageMortalities;
   const canManageSales = currentUser.role === 'admin' || !!userPerms.canManageSales;
   const canUpdateExchangeRate = currentUser.role === 'admin';
+
+  // حساب عمر الفوج الحالي باليوم
+  const calculateFlockAge = (startDateStr: string, endDateStr?: string): number => {
+    const start = new Date(startDateStr);
+    const end = endDateStr ? new Date(endDateStr) : new Date();
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 ? diffDays : 0;
+  };
+
+  // تصدير كافة بيانات الفوج النشط إلى ملف CSV
+  const handleExportCSV = () => {
+    if (!activeCycle) return;
+    
+    let csvContent = "\ufeff"; // BOM for Excel UTF-8 support
+    
+    csvContent += "تقرير الدورة والتحليل المالي الموحد للدورة النشطة,نظام المداجن السورية الرقمية\n";
+    csvContent += `اسم الفوج الحركي,${activeCycle.name}\n`;
+    csvContent += `تاريخ بدء الدورة والاستقبال,${activeCycle.startDate}\n`;
+    csvContent += `تعداد الصيصان الافتتاحي,${activeCycle.initialChicksCount} صوص\n`;
+    csvContent += `سعر شراء الصوص الواحد,$${activeCycle.chickCostUSD}\n`;
+    csvContent += `سعر صرف الدولار عند البدء,${activeCycle.exchangeRateAtStart} ل.س\n`;
+    csvContent += `العمر الفعلي للفوج من يوم البدء,${calculateFlockAge(activeCycle.startDate, activeCycle.endDate)} يوم\n`;
+    csvContent += `سعر صرف الدولار المعتمد لليوم,${currentExchangeRate} ل.س\n`;
+    csvContent += `معدل وفيات الطيور (النفوق),${activeStats ? activeStats.mortalityRate.toFixed(2) : 0}%\n`;
+    csvContent += `صافي الأرباح المقدرة بالليرة (SYP),${activeStats ? activeStats.netProfitSYP : 0}\n`;
+    csvContent += `صافي الأرباح المقدرة بالدولار (USD),${activeStats ? activeStats.netProfitUSD : 0}\n\n`;
+
+    // 1. المصاريف
+    csvContent += "أولاً: سجل نفقات ومصاريف الدورة الحالية الحركية\n";
+    csvContent += "معرف المصروف,التصنيف والنوع,البيان والتوضيح المالي,القيمة بالعملة الأصلية,العملة,سعر الصرف المعتمد,القيمة المكافئة بالدولار,القيمة المكافئة بالليرة,التاريخ\n";
+    const cycleExpenses = expenses.filter(e => e.cycleId === activeCycle.id);
+    const categoryNames: Record<string, string> = {
+      prep: 'تجهيز وتعقيم',
+      chicks: 'شراء صيصان',
+      feed: 'أعلاف وتغذية',
+      medicine: 'أدوية وتحصينات',
+      fuel: 'مازوت وتدفئة',
+      electricity: 'كهرباء ومياه',
+      salaries: 'رواتب وأجور عمال',
+      other: 'نفقات أخرى'
+    };
+    cycleExpenses.forEach(e => {
+      let usdVal = e.amount;
+      let sypVal = e.amount * e.exchangeRate;
+      if (e.currency === 'SYP') {
+        sypVal = e.amount;
+        usdVal = e.amount / e.exchangeRate;
+      }
+      const catText = categoryNames[e.category] || e.category;
+      csvContent += `"${e.id}","${catText}","${e.description.replace(/"/g, '""')}",${e.amount},"${e.currency}",${e.exchangeRate},${usdVal.toFixed(2)},${sypVal.toFixed(0)},"${e.date}"\n`;
+    });
+    csvContent += "\n";
+
+    // 2. النفوق
+    csvContent += "ثانياً: سجل الوفيات والنافق اليومي من الطيور\n";
+    csvContent += "معرف النفوق,العدد النافق باليوم,التاريخ,الملاحظات الطبية أو الأسباب\n";
+    const cycleMortalities = mortalities.filter(m => m.cycleId === activeCycle.id);
+    cycleMortalities.forEach(m => {
+      csvContent += `"${m.id}",${m.count},"${m.date}","${(m.reason || 'فرز طبيعي وعزل').replace(/"/g, '""')}"\n`;
+    });
+    csvContent += "\n";
+
+    // 3. المبيعات
+    csvContent += "ثالثاً: سجل مبيعات الفروج وتسويق اللحم الموجه للتجار\n";
+    csvContent += "معرف الفاتورة,اسم المشتري/التاجر,العدد مباع,الوزن الإجمالي (كغ),سعر الكيلو (ل.س),سعر صرف الدولار الحالي,القيمة بالليرة السورية,القيمة المكافئة بالدولار,التاريخ\n";
+    const cycleSales = sales.filter(s => s.cycleId === activeCycle.id);
+    cycleSales.forEach(s => {
+      const sumSYP = s.totalWeightKg * s.pricePerKgSYP;
+      const sumUSD = sumSYP / s.exchangeRate;
+      csvContent += `"${s.id}","${s.buyerName.replace(/"/g, '""')}",${s.chickenCount},${s.totalWeightKg},${s.pricePerKgSYP},${s.exchangeRate},${sumSYP.toFixed(0)},${sumUSD.toFixed(2)},"${s.date}"\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `تقرير_أرشيف_حسابات_فوج_${activeCycle.name.replace(/\s+/g, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // 1. حسابات الدورة الحالية النشطة
   const activeStats = activeCycle
@@ -203,6 +287,27 @@ export default function Dashboard({
       {/* لوحة مراقبة الأرباح والخسائر وصافى الأداء للدورة الحالية */}
       {activeCycle ? (
         <div className="space-y-6">
+
+          {/* شريط الإجراءات المطور: تصدير البيانات إلى تنسيق CSV */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl glass-card border border-emerald-500/20" id="csv-export-strip">
+            <div className="flex items-center gap-3">
+              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping text-right" />
+              <div className="text-right">
+                <p className="text-xs font-bold text-white leading-none">الفوج النشط جاري التتبع الآن: <strong className="text-emerald-400 font-extrabold">{activeCycle.name}</strong></p>
+                <p className="text-[10px] text-white/50 mt-1">تصدير كافة الحسابات، فواتير المصاريف، العقود، والأوزان المسوقة في تقرير واحد</p>
+              </div>
+            </div>
+            <button
+              id="btn-export-cycle-to-csv"
+              type="button"
+              onClick={handleExportCSV}
+              className="flex items-center gap-2 px-4.5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl cursor-pointer shadow-lg shadow-emerald-500/10 border-0 transition-transform active:scale-95"
+            >
+              <Download className="w-4 h-4" />
+              <span>تصدير ملف ومحاكاة CSV الفوري</span>
+            </button>
+          </div>
+
           {/* الجريد المالي الرئيسي: الربح vs الخسارة وصافي P&L */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
@@ -310,20 +415,20 @@ export default function Dashboard({
             </div>
           </div>
 
-          {/* الجريد المساعد: وفيات المجموعة والكميات المتبقية للبيع */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* الجريد المساعد: وفيات المجموعة، مبيعات اللحم، وعمر الفوج الحالي */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* وفيات المجموعة والنفوق */}
             <div className="glass-card rounded-2xl p-5 shadow-xl text-right flex flex-col justify-between text-white">
               <div className="flex items-center justify-between border-b border-white/15 pb-2 mb-3">
-                <span className="text-xs font-bold text-white/70">معدل ونسبة النفوق (حالات الموت في العنبر)</span>
-                <Skull className="w-4 h-4 text-red-400 animate-pulse" />
+                <span className="text-xs font-bold text-white/70">معدل ونسبة النفوق (الوفيات)</span>
+                <Skull className="w-4 h-4 text-red-500 animate-pulse" />
               </div>
               <div className="flex items-baseline justify-between mt-1">
-                <p className="text-2xl font-extrabold font-mono text-red-400">
+                <p className="text-2xl font-extrabold font-mono text-red-500">
                   {activeStats ? `${activeStats.mortalityRate.toFixed(2)}%` : '0.00%'}
                 </p>
-                <span className="text-xs text-white/50">
-                  (إجمالي الوفيات: {activeStats?.totalMortality.toLocaleString('ar')} / {activeCycle.initialChicksCount.toLocaleString('ar')} صوص)
+                <span className="text-[10px] text-white/50">
+                  ({activeStats?.totalMortality.toLocaleString('ar')} طير هالك)
                 </span>
               </div>
               <div className="w-full bg-white/10 rounded-full h-1.5 mt-3">
@@ -342,15 +447,49 @@ export default function Dashboard({
               </div>
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-2xl font-extrabold font-mono text-sky-400">
+                  <p className="text-xl font-extrabold font-mono text-sky-400 leading-none">
                     {activeStats ? `${activeStats.totalSoldWeightKg.toLocaleString('ar')} كغ` : '0 كغ'}
                   </p>
-                  <p className="text-[10px] text-white/50">العدد الكلي المباع: {activeStats?.totalSoldCount.toLocaleString('ar')} فروج بنجاح</p>
+                  <p className="text-[10px] text-white/50 mt-1">المباع: {activeStats?.totalSoldCount.toLocaleString('ar')} فروج</p>
                 </div>
-                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-300">
-                  <span>العدد الحي المتبقي حالياً: </span>
-                  <span className="font-mono text-white text-sm">{activeStats?.currentCount.toLocaleString('ar')} طير</span>
+                <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[10px] font-bold text-emerald-300">
+                  <span>المتبقي: </span>
+                  <span className="font-mono text-white text-xs">{activeStats?.currentCount.toLocaleString('ar')} طير</span>
                 </div>
+              </div>
+            </div>
+
+            {/* كرت عمر الفوج الحالي (عمر الصيصان) */}
+            <div className="glass-card rounded-2xl p-5 shadow-xl text-right flex flex-col justify-between text-white animate-fade-in" id="flock-age-card">
+              <div className="flex items-center justify-between border-b border-white/15 pb-2 mb-3">
+                <span className="text-xs font-bold text-white/70">العمر الحالي لـلفوج (عمر الصيصان)</span>
+                <Clock className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-2xl font-black font-mono text-emerald-400">
+                    {calculateFlockAge(activeCycle.startDate, activeCycle.endDate)} <span className="text-xs font-bold font-sans">يوم</span>
+                  </p>
+                  <p className="text-[10px] text-white/50">الاستقبال: {activeCycle.startDate}</p>
+                </div>
+                <div className="text-left">
+                  <span className={`text-[9px] font-extrabold px-1.5 py-1 rounded mt-0.5 max-w-fit font-mono ${
+                    calculateFlockAge(activeCycle.startDate, activeCycle.endDate) <= 15 ? 'bg-sky-500/10 text-sky-300 border border-sky-500/20' :
+                    calculateFlockAge(activeCycle.startDate, activeCycle.endDate) <= 35 ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' :
+                    'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                  }`}>
+                    {calculateFlockAge(activeCycle.startDate, activeCycle.endDate) <= 15 ? 'مرحلة الحضانة الأولى' :
+                     calculateFlockAge(activeCycle.startDate, activeCycle.endDate) <= 35 ? 'مرحلة التسمين النشط' :
+                     'مرحلة التسويق النهائي'}
+                  </span>
+                </div>
+              </div>
+              <div className="w-full bg-white/10 rounded-full h-1.5 mt-2">
+                <div 
+                  className="h-1.5 rounded-full bg-emerald-400 transition-all duration-500" 
+                  style={{ width: `${Math.min(100, (calculateFlockAge(activeCycle.startDate, activeCycle.endDate) / 45) * 100)}%` }}
+                  title="النسبة المنقضية من أيام الفوج التقريبية المعيارية (45 يوم)"
+                />
               </div>
             </div>
           </div>

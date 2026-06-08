@@ -12,6 +12,8 @@
     "clean": "rm -rf dist server.js poultry_farm.db",
     "lint": "tsc --noEmit",
     "electron:dev": "electron .",
+    "electron:install": "node node_modules/electron/install.js",
+    "electron:rebuild": "npm rebuild electron --force",
     "electron:build": "npm run build && electron-builder"
   },
   "build": {

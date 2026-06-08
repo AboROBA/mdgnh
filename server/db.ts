@@ -103,100 +103,132 @@ export async function initDatabase() {
 
   try {
     // 1. إنشاء جدول المستخدمين إن لم يكن موجوداً
-    await dbRun(`
-      CREATE TABLE IF NOT EXISTS users (
-        id VARCHAR(50) NOT NULL,
-        username VARCHAR(50) NOT NULL UNIQUE,
-        fullName VARCHAR(100) NOT NULL,
-        password VARCHAR(100) NOT NULL,
-        role VARCHAR(20) NOT NULL DEFAULT 'viewer',
-        canManageCycles BOOLEAN NOT NULL DEFAULT FALSE,
-        canManageExpenses BOOLEAN NOT NULL DEFAULT FALSE,
-        canManageMortalities BOOLEAN NOT NULL DEFAULT FALSE,
-        canManageSales BOOLEAN NOT NULL DEFAULT FALSE,
-        canManageUsers BOOLEAN NOT NULL DEFAULT FALSE,
-        PRIMARY KEY (id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-    `);
+    try {
+      await dbRun(`
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(50) NOT NULL,
+          username VARCHAR(50) NOT NULL UNIQUE,
+          fullName VARCHAR(100) NOT NULL,
+          password VARCHAR(100) NOT NULL,
+          role VARCHAR(20) NOT NULL DEFAULT 'viewer',
+          canManageCycles BOOLEAN NOT NULL DEFAULT FALSE,
+          canManageExpenses BOOLEAN NOT NULL DEFAULT FALSE,
+          canManageMortalities BOOLEAN NOT NULL DEFAULT FALSE,
+          canManageSales BOOLEAN NOT NULL DEFAULT FALSE,
+          canManageUsers BOOLEAN NOT NULL DEFAULT FALSE,
+          PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+      `);
+    } catch (err) {
+      console.warn('[Database] Warning: users table creation skipped/failed (might already exist):', err);
+    }
 
     // 2. إنشاء جدول الإعدادات
-    await dbRun(`
-      CREATE TABLE IF NOT EXISTS settings (
-        setting_key VARCHAR(50) NOT NULL,
-        setting_value TEXT NOT NULL,
-        PRIMARY KEY (setting_key)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-    `);
+    try {
+      await dbRun(`
+        CREATE TABLE IF NOT EXISTS settings (
+          setting_key VARCHAR(50) NOT NULL,
+          setting_value TEXT NOT NULL,
+          PRIMARY KEY (setting_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+      `);
+    } catch (err) {
+      console.warn('[Database] Warning: settings table creation skipped/failed (might already exist):', err);
+    }
 
     // 3. إنشاء جدول الدورات
-    await dbRun(`
-      CREATE TABLE IF NOT EXISTS cycles (
-        id VARCHAR(50) NOT NULL,
-        name VARCHAR(100) NOT NULL,
-        status VARCHAR(10) NOT NULL,
-        startDate DATE NOT NULL,
-        endDate DATE,
-        initialChicksCount INT NOT NULL,
-        chickCostUSD DECIMAL(10, 2) NOT NULL,
-        exchangeRateAtStart DECIMAL(10, 2) NOT NULL,
-        feedPricePerTonUSD DECIMAL(10, 2) NOT NULL,
-        notes TEXT,
-        PRIMARY KEY (id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-    `);
+    try {
+      await dbRun(`
+        CREATE TABLE IF NOT EXISTS cycles (
+          id VARCHAR(50) NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          status VARCHAR(10) NOT NULL,
+          startDate DATE NOT NULL,
+          endDate DATE,
+          initialChicksCount INT NOT NULL,
+          chickCostUSD DECIMAL(10, 2) NOT NULL,
+          exchangeRateAtStart DECIMAL(10, 2) NOT NULL,
+          feedPricePerTonUSD DECIMAL(10, 2) NOT NULL,
+          notes TEXT,
+          PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+      `);
+    } catch (err) {
+      console.warn('[Database] Warning: cycles table creation skipped/failed (might already exist):', err);
+    }
 
     // 4. إنشاء جدول المصاريف
-    await dbRun(`
-      CREATE TABLE IF NOT EXISTS expenses (
-        id VARCHAR(50) NOT NULL,
-        cycleId VARCHAR(50) NOT NULL,
-        category VARCHAR(20) NOT NULL,
-        description TEXT NOT NULL,
-        amount DECIMAL(12, 2) NOT NULL,
-        currency VARCHAR(3) NOT NULL,
-        exchangeRate DECIMAL(10, 2) NOT NULL,
-        date DATE NOT NULL,
-        PRIMARY KEY (id),
-        CONSTRAINT fk_expenses_cycles FOREIGN KEY (cycleId) REFERENCES cycles (id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-    `);
+    try {
+      await dbRun(`
+        CREATE TABLE IF NOT EXISTS expenses (
+          id VARCHAR(50) NOT NULL,
+          cycleId VARCHAR(50) NOT NULL,
+          category VARCHAR(20) NOT NULL,
+          description TEXT NOT NULL,
+          amount DECIMAL(12, 2) NOT NULL,
+          currency VARCHAR(3) NOT NULL,
+          exchangeRate DECIMAL(10, 2) NOT NULL,
+          date DATE NOT NULL,
+          PRIMARY KEY (id),
+          CONSTRAINT fk_expenses_cycles FOREIGN KEY (cycleId) REFERENCES cycles (id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+      `);
+    } catch (err) {
+      console.warn('[Database] Warning: expenses table creation skipped/failed (might already exist):', err);
+    }
 
     // 5. إنشاء جدول وفيات الطيور
-    await dbRun(`
-      CREATE TABLE IF NOT EXISTS mortalities (
-        id VARCHAR(50) NOT NULL,
-        cycleId VARCHAR(50) NOT NULL,
-        count INT NOT NULL,
-        date DATE NOT NULL,
-        reason VARCHAR(255),
-        PRIMARY KEY (id),
-        CONSTRAINT fk_mortalities_cycles FOREIGN KEY (cycleId) REFERENCES cycles (id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-    `);
+    try {
+      await dbRun(`
+        CREATE TABLE IF NOT EXISTS mortalities (
+          id VARCHAR(50) NOT NULL,
+          cycleId VARCHAR(50) NOT NULL,
+          count INT NOT NULL,
+          date DATE NOT NULL,
+          reason VARCHAR(255),
+          PRIMARY KEY (id),
+          CONSTRAINT fk_mortalities_cycles FOREIGN KEY (cycleId) REFERENCES cycles (id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+      `);
+    } catch (err) {
+      console.warn('[Database] Warning: mortalities table creation skipped/failed (might already exist):', err);
+    }
 
     // 6. إنشاء جدول مبيعات اللحم والدجاج اليومي
-    await dbRun(`
-      CREATE TABLE IF NOT EXISTS sales (
-        id VARCHAR(50) NOT NULL,
-        cycleId VARCHAR(50) NOT NULL,
-        buyerName VARCHAR(150) NOT NULL,
-        chickenCount INT NOT NULL,
-        totalWeightKg DECIMAL(10, 2) NOT NULL,
-        pricePerKgSYP DECIMAL(10, 2) NOT NULL,
-        exchangeRate DECIMAL(10, 2) NOT NULL,
-        date DATE NOT NULL,
-        PRIMARY KEY (id),
-        CONSTRAINT fk_sales_cycles FOREIGN KEY (cycleId) REFERENCES cycles (id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-    `);
+    try {
+      await dbRun(`
+        CREATE TABLE IF NOT EXISTS sales (
+          id VARCHAR(50) NOT NULL,
+          cycleId VARCHAR(50) NOT NULL,
+          buyerName VARCHAR(150) NOT NULL,
+          chickenCount INT NOT NULL,
+          totalWeightKg DECIMAL(10, 2) NOT NULL,
+          pricePerKgSYP DECIMAL(10, 2) NOT NULL,
+          exchangeRate DECIMAL(10, 2) NOT NULL,
+          date DATE NOT NULL,
+          PRIMARY KEY (id),
+          CONSTRAINT fk_sales_cycles FOREIGN KEY (cycleId) REFERENCES cycles (id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+      `);
+    } catch (err) {
+      console.warn('[Database] Warning: sales table creation skipped/failed (might already exist):', err);
+    }
   } finally {
     // إعادة تفعيل فحص المفاتيح الخارجية بعد الانتهاء
     await dbRun("SET FOREIGN_KEY_CHECKS = 1");
   }
 
   // فحص ما إذا كانت الجداول فارغة لغرس البيانات القياسية مع سعر صرف افتراضي 14100
-  const userCount = await dbGet<{ count: number }>("SELECT count(*) as count FROM users");
-  if (userCount && userCount.count === 0) {
+  let userCount = 0;
+  try {
+    const userCountRow = await dbGet<{ count: number }>("SELECT count(*) as count FROM users");
+    userCount = userCountRow ? userCountRow.count : 0;
+  } catch (err) {
+    console.warn('[Database] Could not verify users count, skipping data seeding:', err);
+    userCount = -1; // تخطي غرس البيانات لأن الجداول ربما غير تامة أو غير موجودة وصانع السحاب يتكفل بها
+  }
+
+  if (userCount === 0) {
     console.log("[Database] Seeding standard configurations into cloud TiDB MySQL...");
 
     // أولاً: الحسابات القياسية
